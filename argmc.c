@@ -9,9 +9,9 @@
 #define NA 125
 #define KB 1.38064852E-23
 #define NUM_BINS 100
-#define NUM_EQUIL 50000
-#define NUM_STATS 1000000
-#define SAMPLE_FREQ 500
+#define NUM_EQUIL 50
+#define NUM_STATS 100
+#define SAMPLE_FREQ 1
 #define SIGMA 3.4E-10
 #define MC_MOVE 1E-10
 #define VOL_MOVE 0.1
