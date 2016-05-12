@@ -9,9 +9,17 @@
 #define NA 125
 #define KB 1.38064852E-23
 #define NUM_BINS 100
+<<<<<<< HEAD
 #define NUM_EQUIL 50
 #define NUM_STATS 100
 #define SAMPLE_FREQ 1
+=======
+// #define NUM_EQUIL 50000
+#define NUM_EQUIL 5
+// #define NUM_STATS 1000000
+#define NUM_STATS 10000
+#define SAMPLE_FREQ 500
+>>>>>>> downstream/master
 #define SIGMA 3.4E-10
 #define MC_MOVE 1E-10
 #define VOL_MOVE 0.1
@@ -19,6 +27,7 @@
 #define TEMPERATURE 90.0
 #define PRESSURE 101325.0
 #define DENSITY 1.3954 //g/cm^3 at bp
+#define ABS2ANG 1.0e10
 //Global Variables
 typedef struct atoms{
     float x;
@@ -40,6 +49,9 @@ float total_vol_moves = 0.0;
 float bins[NUM_BINS];
 float currdensity = 0.0;
 //CODE
+float random() {
+    return ((float)rand() / (float)RAND_MAX);
+}
 void setup_system_new(atom a[]){
     float width = ceil(cbrtf((float) NA));
     first_L = 6*SIGMA;
@@ -101,19 +113,26 @@ void print_locations(atom a[], atom b[]){
         printf("(x,y,z) : (%g,%g,%g) \t (%g,%g,%g) \n", a[i-1].x,a[i-1].y,a[i-1].z,b[i-1].x,b[i-1].y,b[i-1].z);
     }
 }
-void print_XYZ(atom a[]){
-    printf("125\nARGON BOX\n");
-    for(int8_t i = NA; i>0; i--){
+void print_XYZ(atom a[], FILE* xyzfile){
+    if (xyzfile == NULL) {
+      printf("%d\nARGON BOX\n", NA);
+      for(int8_t i = NA; i>0; i--){
         printf("Ar\t%g\t%g\t%g\n", a[i-1].x,a[i-1].y,a[i-1].z);
+      }
+    } else {
+      fprintf(xyzfile, "%d\nARGON BOX\n", NA);
+      for(int8_t i = NA; i>0; i--){
+        fprintf(xyzfile, "Ar\t%g\t%g\t%g\n", a[i-1].x * ABS2ANG,a[i-1].y  * ABS2ANG, a[i-1].z * ABS2ANG);
+      }
     }
 }
 void translational_move_all(){
     total_trans_moves+=(float)NA;
     float old_e = total_energy(old_argons);
     for(int8_t i = NA; i>0; i--){
-      float random_x = (drand48()-0.5)*MC_MOVE;
-      float random_y= (drand48()-0.5)*MC_MOVE;
-      float random_z = (drand48()-0.5)*MC_MOVE;
+      float random_x = (random()-0.5)*MC_MOVE;
+      float random_y= (random()-0.5)*MC_MOVE;
+      float random_z = (random()-0.5)*MC_MOVE;
       new_argons[i].x += random_x;
       new_argons[i].y += random_y;
       new_argons[i].z += random_z;
@@ -136,7 +155,7 @@ void translational_move_all(){
           new_argons[i].z-=L;
       }
       float new_e = total_energy(new_argons);
-      if (drand48()<expf(-(1.0/(KB *TEMPERATURE))*(new_e - old_e))){
+      if (random()<expf(-(1.0/(KB *TEMPERATURE))*(new_e - old_e))){
           accepted_trans_moves +=1.0;
           old_e = new_e;
           memcpy(old_argons, new_argons, sizeof(new_argons));
@@ -148,10 +167,10 @@ void translational_move_all(){
 void translational_move(){
     total_trans_moves+=1.0;
     float old_e = total_energy(old_argons);
-    uint8_t random_particle = (int) round(drand48()*NA);
-    float random_x = (drand48()-0.5)*MC_MOVE;
-    float random_y= (drand48()-0.5)*MC_MOVE;
-    float random_z = (drand48()-0.5)*MC_MOVE;
+    uint8_t random_particle = (int) round(random()*NA);
+    float random_x = (random()-0.5)*MC_MOVE;
+    float random_y= (random()-0.5)*MC_MOVE;
+    float random_z = (random()-0.5)*MC_MOVE;
     new_argons[random_particle].x += random_x;
     new_argons[random_particle].y += random_y;
     new_argons[random_particle].z += random_z;
@@ -174,7 +193,7 @@ void translational_move(){
         new_argons[random_particle].z-=L;
     }
     float new_e = total_energy(new_argons);
-    if (drand48()<expf(-(1.0/(KB *TEMPERATURE))*(new_e - old_e))){
+    if (random()<expf(-(1.0/(KB *TEMPERATURE))*(new_e - old_e))){
         accepted_trans_moves +=1.0;
         memcpy(old_argons, new_argons, sizeof(new_argons));
     } else{
@@ -185,7 +204,7 @@ void volume_move(){
     total_vol_moves+=1.0;
     float old_e = total_energy(old_argons);
     float old_vol = powf(L,3);
-    float new_vol = expf(logf(old_vol) + (drand48() - 0.5)*VOL_MOVE);
+    float new_vol = expf(logf(old_vol) + (random() - 0.5)*VOL_MOVE);
     float new_L = cbrtf(new_vol);
     for(int8_t i = NA; i>0;i--){
         new_argons[i].x*=(new_L/L);
@@ -193,7 +212,7 @@ void volume_move(){
         new_argons[i].z*=(new_L/L);
     }
     float new_e = total_energy(new_argons);
-    if (drand48()<expf(-(1.0/(KB *TEMPERATURE))*((new_e - old_e) + (PRESSURE*(new_vol- old_vol)) - ((NA+1)*(KB*TEMPERATURE)*logf(new_vol/old_vol))))){
+    if (random()<expf(-(1.0/(KB *TEMPERATURE))*((new_e - old_e) + (PRESSURE*(new_vol- old_vol)) - ((NA+1)*(KB*TEMPERATURE)*logf(new_vol/old_vol))))){
         accepted_vol_moves +=1.0;
         memcpy(old_argons, new_argons, sizeof(new_argons));
         L=new_L;
@@ -253,23 +272,26 @@ void print_startup_info(){
   printf("Max Vol move:\t%g\n\n",VOL_MOVE);
   printf("First L:\t%g\n",first_L);
 }
+
 int main(){
-    FILE *output;
+    FILE *output, *xyzfile;
     output = fopen("output.data","w");
+    xyzfile = fopen("trajectory.xyz", "w");
     setup_histogram();
-    setup_system(old_argons);
     setup_system(new_argons);
+    setup_system(old_argons);
+    //memcpy(&old_argons, &new_argons, sizeof(new_argons));
     print_startup_info();
     /* Don't attempt a vol move every n steps
         frenkel smit pg 119 */
-    srand48(time(NULL));
-    //print_XYZ(old_argons);
+    srand(time(NULL));
+    print_XYZ(old_argons, NULL);
     printf("\n*****************\n");
     printf("Equilibration run\n");
     printf("*****************\n\n");
     fprintf(output,"Energy \t Vol \t L\n");
     for(int32_t n_equil = NUM_EQUIL; n_equil>=0; n_equil--){
-        if(drand48()*(NA+1)+1<= NA){
+        if(random()*(NA+1)+1<= NA){
             translational_move();
         }
         else{
@@ -287,13 +309,13 @@ int main(){
     for(int32_t n_stats = NUM_STATS; n_stats>=0; n_stats--){
         temp_E = total_energy(old_argons);
         if (temp_E >1E6){
-            print_XYZ(old_argons);
+          print_XYZ(old_argons, NULL);
         }
         count +=1.0;
         percent1 = accepted_vol_moves/total_vol_moves;
         percent2 = accepted_trans_moves/total_trans_moves;
         printf("%g\t%g\t%g\t%g\t%g\t%g\t%g\n",L,total_energy(old_argons)*6.022E23/125,currdensity,total_vol_moves,total_trans_moves,percent1,percent2);
-        if(drand48()*(NA+1)+1<= NA){
+        if(random()*(NA+1)+1<= NA){
             translational_move();
         }
         else{
@@ -307,14 +329,16 @@ int main(){
             avg_E += temp_E/((float)NUM_STATS / SAMPLE_FREQ);
             avg_L += L/((float)NUM_STATS/ SAMPLE_FREQ);
         }
+        print_XYZ(old_argons, xyzfile);
     }
     save_histogram();
     printf("Avg E %g\n", avg_E);
     printf("Avg L %g\n", avg_L);
     printf("\nXYZ OF ARGS\n");
     printf("*****************\n\n");
-    //print_XYZ(old_argons);
+    print_XYZ(old_argons, NULL);
     fclose(output);
+    fclose(xyzfile);
     printf("\n\n\nSuccessful Termination\n" );
     return 0;
 }
