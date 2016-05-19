@@ -9,17 +9,9 @@
 #define NA 125
 #define KB 1.38064852E-23
 #define NUM_BINS 100
-<<<<<<< HEAD
 #define NUM_EQUIL 50
 #define NUM_STATS 100
 #define SAMPLE_FREQ 1
-=======
-// #define NUM_EQUIL 50000
-#define NUM_EQUIL 5
-// #define NUM_STATS 1000000
-#define NUM_STATS 10000
-#define SAMPLE_FREQ 500
->>>>>>> downstream/master
 #define SIGMA 3.4E-10
 #define MC_MOVE 1E-10
 #define VOL_MOVE 0.1
@@ -39,7 +31,7 @@ atom old_argons[NA];
 atom new_argons[NA];
 float L = 0;
 float first_L = 0;
-float energies[NUM_STATS];
+float energies[NA * NA];
 float avg_E = 0.0;
 float avg_L = 0.0;
 float accepted_trans_moves = 0.0;
@@ -72,6 +64,9 @@ void setup_system_new(atom a[]){
     }
 }
 void setup_system(atom a[]){
+  // initialize energy array
+  //for () {
+  //}
     float width = ceil(cbrtf((float) NA));
     first_L = cbrtf((float) NA/(DENSITY*100*100*100*6.022E23/39.948));
     L = first_L;
@@ -98,11 +93,13 @@ float minimum_image_argon(float x1,float y1,float z1,float x2,float y2,float z2)
     return r;
 }
 float total_energy(atom a[]){
+  // only call me once!
     float total = 0.0;
     float r;
     for(int8_t i = NA; i>0; i--){
         for(int8_t j = i-1;j>0;j--){
             r= minimum_image_argon(a[i-1].x,a[i-1].y,a[i-1].z,a[j-1].x,a[j-1].y,a[j-1].z);
+            // energies[i] = 4*EPSILON*(powf(SIGMA/r, 12)-powf(SIGMA/r,6));
             total += 4*EPSILON*(powf(SIGMA/r, 12)-powf(SIGMA/r,6));
         }
     }
@@ -279,8 +276,10 @@ int main(){
     xyzfile = fopen("trajectory.xyz", "w");
     setup_histogram();
     setup_system(new_argons);
+    // Comment out one of the two lines, they should be equivalent to
+    // each other.
     setup_system(old_argons);
-    //memcpy(&old_argons, &new_argons, sizeof(new_argons));
+    // memcpy(&old_argons, &new_argons, sizeof(new_argons));
     print_startup_info();
     /* Don't attempt a vol move every n steps
         frenkel smit pg 119 */
