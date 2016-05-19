@@ -6,11 +6,11 @@
 #include <math.h>
 #include <time.h>
 //Constants
-#define NA 125
+#define NA 343
 #define KB 1.38064852E-23
 #define NUM_BINS 100
 #define NUM_EQUIL 50
-#define NUM_STATS 100
+#define NUM_STATS 300
 #define SAMPLE_FREQ 1
 #define SIGMA 3.4E-10
 #define MC_MOVE 1E-10
@@ -44,25 +44,25 @@ float currdensity = 0.0;
 float random() {
     return ((float)rand() / (float)RAND_MAX);
 }
-void setup_system_new(atom a[]){
-    float width = ceil(cbrtf((float) NA));
-    first_L = 6*SIGMA;
-    L = first_L;
-    float spacing =  SIGMA;
-    float offset = spacing/2.0;
-    uint8_t count = 0;
-    for(float xpos = offset; xpos <= spacing*width; xpos +=spacing){
-        for(float ypos = offset; ypos <= spacing*width; ypos +=spacing){
-            for(float zpos = offset; zpos <= spacing*width; zpos +=spacing){
-                a[count].atomic_number = 18;
-                a[count].x = xpos;
-                a[count].y = ypos;
-                a[count].z = zpos;
-                count++;
-            }
-        }
-    }
-}
+/* void setup_system_new(atom a[]){ */
+/*     float width = ceil(cbrtf((float) NA)); */
+/*     first_L = 6*SIGMA; */
+/*     L = first_L; */
+/*     float spacing =  SIGMA; */
+/*     float offset = spacing/2.0; */
+/*     uint8_t count = 0; */
+/*     for(float xpos = offset; xpos <= spacing*width; xpos +=spacing){ */
+/*         for(float ypos = offset; ypos <= spacing*width; ypos +=spacing){ */
+/*             for(float zpos = offset; zpos <= spacing*width; zpos +=spacing){ */
+/*                 a[count].atomic_number = 18; */
+/*                 a[count].x = xpos; */
+/*                 a[count].y = ypos; */
+/*                 a[count].z = zpos; */
+/*                 count++; */
+/*             } */
+/*         } */
+/*     } */
+/* } */
 void setup_system(atom a[]){
   // initialize energy array
   //for () {
@@ -72,7 +72,7 @@ void setup_system(atom a[]){
     L = first_L;
     float spacing =  L/width;
     float offset = spacing/2.0;
-    uint8_t count = 0;
+    size_t count = 0;
     for(float xpos = offset; xpos <= spacing*width; xpos +=spacing){
         for(float ypos = offset; ypos <= spacing*width; ypos +=spacing){
             for(float zpos = offset; zpos <= spacing*width; zpos +=spacing){
@@ -89,36 +89,44 @@ float minimum_image_argon(float x1,float y1,float z1,float x2,float y2,float z2)
     float dx = (x2-x1) - L*round((x2-x1)/(L*0.5));
     float dy = (y2-y1) - L*round((y2-y1)/(L*0.5));
     float dz = (z2-z1) - L*round((z2-z1)/(L*0.5));
-    float r = sqrtf(powf(dx,2)+powf(dy,2)+powf(dz,2));
+    float r = sqrt(dx*dx + dy*dy + dz*dz);
+
     return r;
 }
 float total_energy(atom a[]){
   // only call me once!
     float total = 0.0;
-    float r;
-    for(int8_t i = NA; i>0; i--){
-        for(int8_t j = i-1;j>0;j--){
-            r= minimum_image_argon(a[i-1].x,a[i-1].y,a[i-1].z,a[j-1].x,a[j-1].y,a[j-1].z);
-            // energies[i] = 4*EPSILON*(powf(SIGMA/r, 12)-powf(SIGMA/r,6));
-            total += 4*EPSILON*(powf(SIGMA/r, 12)-powf(SIGMA/r,6));
+    float r, frac, lj6, lj12;
+#pragma omp parallel private(r, frac, lj6, lj12)
+    {
+#pragma omp for reduction(+:total)
+      for(size_t i = NA; i>0; i--){
+        for(size_t j = i-1;j>0;j--){
+          r= minimum_image_argon(a[i-1].x,a[i-1].y,a[i-1].z,a[j-1].x,a[j-1].y,a[j-1].z);
+          // energies[i*NA + j] = 4*EPSILON*(powf(SIGMA/r, 12)-powf(SIGMA/r,6));
+          frac = SIGMA/r;
+          lj6 = frac*frac*frac*frac*frac*frac;
+          lj12 = lj6 * lj6;
+          total += 4*EPSILON*(lj12 - lj6);
         }
+      }
     }
     return total;
 }
 void print_locations(atom a[], atom b[]){
-    for(int8_t i = NA; i>0; i--){
+    for(size_t i = NA; i>0; i--){
         printf("(x,y,z) : (%g,%g,%g) \t (%g,%g,%g) \n", a[i-1].x,a[i-1].y,a[i-1].z,b[i-1].x,b[i-1].y,b[i-1].z);
     }
 }
 void print_XYZ(atom a[], FILE* xyzfile){
     if (xyzfile == NULL) {
       printf("%d\nARGON BOX\n", NA);
-      for(int8_t i = NA; i>0; i--){
+      for(size_t i = NA; i>0; i--){
         printf("Ar\t%g\t%g\t%g\n", a[i-1].x,a[i-1].y,a[i-1].z);
       }
     } else {
       fprintf(xyzfile, "%d\nARGON BOX\n", NA);
-      for(int8_t i = NA; i>0; i--){
+      for(size_t i = NA; i>0; i--){
         fprintf(xyzfile, "Ar\t%g\t%g\t%g\n", a[i-1].x * ABS2ANG,a[i-1].y  * ABS2ANG, a[i-1].z * ABS2ANG);
       }
     }
@@ -126,7 +134,10 @@ void print_XYZ(atom a[], FILE* xyzfile){
 void translational_move_all(){
     total_trans_moves+=(float)NA;
     float old_e = total_energy(old_argons);
-    for(int8_t i = NA; i>0; i--){
+    // 1. update all atom positions
+    // 2. calculate all energies
+    // 3. accept or reject
+    for(size_t i = NA; i>0; i--){
       float random_x = (random()-0.5)*MC_MOVE;
       float random_y= (random()-0.5)*MC_MOVE;
       float random_z = (random()-0.5)*MC_MOVE;
@@ -164,7 +175,7 @@ void translational_move_all(){
 void translational_move(){
     total_trans_moves+=1.0;
     float old_e = total_energy(old_argons);
-    uint8_t random_particle = (int) round(random()*NA);
+    size_t random_particle = (int) round(random()*NA);
     float random_x = (random()-0.5)*MC_MOVE;
     float random_y= (random()-0.5)*MC_MOVE;
     float random_z = (random()-0.5)*MC_MOVE;
@@ -203,7 +214,7 @@ void volume_move(){
     float old_vol = powf(L,3);
     float new_vol = expf(logf(old_vol) + (random() - 0.5)*VOL_MOVE);
     float new_L = cbrtf(new_vol);
-    for(int8_t i = NA; i>0;i--){
+    for(size_t i = NA; i>0;i--){
         new_argons[i].x*=(new_L/L);
         new_argons[i].y*=(new_L/L);
         new_argons[i].z*=(new_L/L);
@@ -218,23 +229,30 @@ void volume_move(){
     }
 }
 void setup_histogram(){
-  for(int16_t i = 0; i <NUM_BINS; i++){
+  for(size_t i = 0; i <NUM_BINS; i++){
       bins[i] = 0.0;
   }
 }
+
 void make_histogram(){
   float r = 0.0;
   int index = 0;
-  for(int8_t i = NA; i>0; i--){
-      for(int8_t j = i-1;j>0;j--){
-          r=minimum_image_argon(old_argons[i-1].x,old_argons[i-1].y,old_argons[i-1].z,old_argons[j-1].x,old_argons[j-1].y,old_argons[j-1].z);
-          index = (int)(floor(r*NUM_BINS/(first_L*0.5)));
-          if(index<NUM_BINS){
-              bins[index]+=2.0;
-          }
+#pragma omp parallel shared(bins)
+  {
+#pragma omp for private(r,index)
+    for(size_t i = NA; i>0; i--){
+      for(size_t j = i-1;j>0;j--){
+        r=minimum_image_argon(old_argons[i-1].x,old_argons[i-1].y,old_argons[i-1].z,old_argons[j-1].x,old_argons[j-1].y,old_argons[j-1].z);
+        index = (int)(floor(r*NUM_BINS/(first_L*0.5)));
+        if(index<NUM_BINS){
+#pragma omp atomic
+          bins[index] += 2.0;
+        }
       }
+    }
   }
 }
+
 void save_histogram(){
     FILE *hist;
     hist = fopen("hist.data","w");
@@ -242,7 +260,7 @@ void save_histogram(){
     float rho = NA/powf(avg_L ,3);
     float curr_r = 0.0;
     float next_r = 0.0;
-    for(int16_t i = 0; i < NUM_BINS; i++){
+    for(size_t i = 0; i < NUM_BINS; i++){
         curr_r = i*increment;
         next_r = (i+1)*increment;
         //*increment
@@ -289,7 +307,7 @@ int main(){
     printf("Equilibration run\n");
     printf("*****************\n\n");
     fprintf(output,"Energy \t Vol \t L\n");
-    for(int32_t n_equil = NUM_EQUIL; n_equil>=0; n_equil--){
+    for(size_t n_equil = 0; n_equil < NUM_EQUIL; n_equil++){
         if(random()*(NA+1)+1<= NA){
             translational_move();
         }
@@ -305,15 +323,12 @@ int main(){
     float percent2 = 0.0;
     accepted_vol_moves = 0.0;
     accepted_trans_moves = 0.0;
-    for(int32_t n_stats = NUM_STATS; n_stats>=0; n_stats--){
+    for(size_t n_stats = 0; n_stats < NUM_STATS; n_stats++){
         temp_E = total_energy(old_argons);
-        if (temp_E >1E6){
-          print_XYZ(old_argons, NULL);
-        }
         count +=1.0;
         percent1 = accepted_vol_moves/total_vol_moves;
         percent2 = accepted_trans_moves/total_trans_moves;
-        printf("%g\t%g\t%g\t%g\t%g\t%g\t%g\n",L,total_energy(old_argons)*6.022E23/125,currdensity,total_vol_moves,total_trans_moves,percent1,percent2);
+        printf("%g\t%g\t%g\t%g\t%g\t%g\t%g\n",L,total_energy(old_argons)*6.022E23/NA,currdensity,total_vol_moves,total_trans_moves,percent1,percent2);
         if(random()*(NA+1)+1<= NA){
             translational_move();
         }
